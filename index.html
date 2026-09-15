@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Magical Pink Star Assembly & Transformation</title>
+    <!-- Google Fonts for cinematic typography sampling -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #030108;
+            font-family: 'Montserrat', sans-serif;
+            color: #ffffff;
+        }
+
+        /* Ambient cosmic background container */
+        #viewport {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at 50% 45%, #1a0826 0%, #0a0312 60%, #020005 100%);
+        }
+
+        /* Canvas element for star particles */
+        #starCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Vignette overlay for cinematic feel */
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.85);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="viewport">
+        <canvas id="starCanvas"></canvas>
+        <div class="vignette"></div>
+    </div>
+
+    <script>
+        // =================================================================
+        // EDITABLE CONFIGURATION SECTION
+        // Change the values below to customize the star animation text!
+        // =================================================================
+        const NAME = "SAHIL";
+        const MESSAGE = "you are the best ";
+        // =================================================================
+
+        const canvas = document.getElementById('starCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Display parameters
+        let width = 0;
+        let height = 0;
+        let dpr = 1;
+
+        // Particle arrays and state flags
+        let mainStars = [];
+        let ambientStars = [];
+        let nameTargets = [];
+        let messageTargets = [];
+
+        // Animation timing states
+        let animationStartTime = 0;
+        let transitionStartTime = 0;
+        
+        // Animation stage machine: 'FLIGHT' -> 'NAME_HOLD' -> 'TRANSITION' -> 'MESSAGE_HOLD'
+        let currentStage = 'FLIGHT';
+
+        // Pink/Rose/White Glowing Palette
+        const PALETTE = [
+            { r: 255, g: 182, b: 193 }, // Light Pink
+            { r: 255, g: 105, b: 180 }, // Hot Pink
+            { r: 255, g: 20,  b: 147 }, // Deep Pink
+            { r: 244, g: 114, b: 182 }, // Rose Pink
+            { r: 251, g: 207, b: 232 }, // Soft Blush
+            { r: 255, g: 255, b: 255 }  // Pure White Glow
+        ];
+
+        // --- MOBILE PORTRAIT OPTIMIZATION: Pre-rendered Sprites ---
+        // Replaces expensive per-frame radial gradients with pre-drawn canvas image cache
+        const starSprites = {};
+        function preRenderSprites() {
+            PALETTE.forEach((color, idx) => {
+                starSprites[`${idx}_0`] = createStarSprite(color, false); // Normal Glow
+                starSprites[`${idx}_1`] = createStarSprite(color, true);  // With Lens Flares
+            });
+        }
+
+        function createStarSprite(color, hasFlares) {
+            const canvas = document.createElement('canvas');
+            const baseSize = 25; // Lightweight base size for smooth scaling
+            canvas.width = baseSize * 2;
+            canvas.height = baseSize * 2;
+            const ctx = canvas.getContext('2d');
+            const center = baseSize;
+
+            const { r, g, b } = color;
+            const outerRadius = baseSize * 0.9;
+            
+            const radGrad = ctx.createRadialGradient(center, center, 0, center, center, outerRadius);
+            radGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 1)`);
+            radGrad.addColorStop(0.3, `rgba(${r}, ${g}, ${b}, 0.4)`);
+            radGrad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+            ctx.fillStyle = radGrad;
+            ctx.beginPath();
+            ctx.arc(center, center, outerRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Core
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(center, center, baseSize * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (hasFlares) {
+                const fLength = baseSize * 0.95;
+                const fWidth = baseSize * 0.1;
+                ctx.fillStyle = `rgba(255, 255, 255, 0.8)`;
+                ctx.beginPath();
+                // Horizontal Cross
+                ctx.moveTo(center - fLength, center);
+                ctx.quadraticCurveTo(center, center, center, center - fWidth);
+                ctx.quadraticCurveTo(center, center, center + fLength, center);
+                ctx.quadraticCurveTo(center, center, center, center + fWidth);
+                ctx.quadraticCurveTo(center, center, center - fLength, center);
+                // Vertical Cross
+                ctx.moveTo(center, center - fLength);
+                ctx.quadraticCurveTo(center, center, center - fWidth, center);
+                ctx.quadraticCurveTo(center, center, center, center + fLength);
+                ctx.quadraticCurveTo(center, center, center + fWidth, center);
+                ctx.quadraticCurveTo(center, center, center, center - fLength);
+                ctx.fill();
+            }
+            return canvas;
+        }
+        // ------------------------------------------------
+
+        function easeOutQuart(t) {
+            return 1 - Math.pow(1 - t, 4);
+        }
+
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        function easeOutCubic(t) {
+            return 1 - Math.pow(1 - t, 3);
+        }
+
+        function wrapText(text, maxCharsPerLine = 15) {
+            const words = text.split(' ');
+            if (words.length <= 1) return [text];
+
+            const lines = [];
+            let currentLine = words[0];
+
+            for (let i = 1; i < words.length; i++) {
+                if ((currentLine + ' ' + words[i]).length <= maxCharsPerLine) {
+                    currentLine += ' ' + words[i];
+                } else {
+                    lines.push(currentLine);
+                    currentLine = words[i];
+                }
+            }
+            lines.push(currentLine);
+            return lines;
+        }
+
+        function sampleTextPoints(text, isMultiLine = false) {
+            const offscreen = document.createElement('canvas');
+            const offCtx = offscreen.getContext('2d');
+
+            let lines = [text];
+            if (isMultiLine && text.length > 8) {
+                // MOBILE PORTRAIT OPTIMIZATION: Aggressive text wrap strictly for narrow portrait screens
+                lines = wrapText(text, 14); 
+            }
+
+            // MOBILE PORTRAIT OPTIMIZATION: Font sizes calibrated purely for tall/narrow screens
+            let fontSize;
+            if (!isMultiLine) {
+                fontSize = Math.min(width * 0.22, 90);
+                fontSize = Math.max(fontSize, 40);
+            } else {
+                fontSize = Math.min(width * 0.13, 55);
+                fontSize = Math.max(fontSize, 28);
+            }
+
+            offCtx.font = `900 ${fontSize}px "Montserrat", sans-serif`;
+
+            // Calculate max width and line heights
+            let maxLineWidth = 0;
+            lines.forEach(line => {
+                const w = offCtx.measureText(line).width;
+                if (w > maxLineWidth) maxLineWidth = w;
+            });
+
+            const lineHeight = fontSize * 1.4; // Increased line-height for better legibility
+            const totalTextHeight = lineHeight * lines.length;
+
+            offscreen.width = Math.ceil(maxLineWidth) + 60;
+            offscreen.height = Math.ceil(totalTextHeight) + 60;
+
+            // Render text onto offscreen canvas
+            offCtx.font = `900 ${fontSize}px "Montserrat", sans-serif`;
+            offCtx.fillStyle = '#ffffff';
+            offCtx.textAlign = 'center';
+            offCtx.textBaseline = 'middle';
+
+            const startY = offscreen.height / 2 - ((lines.length - 1) * lineHeight) / 2;
+            lines.forEach((line, idx) => {
+                offCtx.fillText(line, offscreen.width / 2, startY + idx * lineHeight);
+            });
+
+            // Extract pixel data
+            const imgData = offCtx.getImageData(0, 0, offscreen.width, offscreen.height);
+            const data = imgData.data;
+            const targetPoints = [];
+
+            const startX = (width - offscreen.width) / 2;
+            const renderStartY = (height - offscreen.height) / 2;
+
+            // MOBILE PORTRAIT OPTIMIZATION: Fixed tight step size for high star density on small screens
+            // Finer resolution (step 3) for the smaller multi-line message to keep letters sharp
+            const step = isMultiLine ? 3 : 4;
+
+            for (let y = 0; y < offscreen.height; y += step) {
+                for (let x = 0; x < offscreen.width; x += step) {
+                    const alpha = data[(y * offscreen.width + x) * 4 + 3];
+                    if (alpha > 128) {
+                        const jitterX = (Math.random() - 0.5) * 1.5;
+                        const jitterY = (Math.random() - 0.5) * 1.5;
+                        targetPoints.push({
+                            x: startX + x + jitterX,
+                            y: renderStartY + y + jitterY
+                        });
+                    }
+                }
+            }
+
+            return targetPoints;
+        }
+
+        function initAmbientStars() {
+            ambientStars = [];
+            // MOBILE PORTRAIT OPTIMIZATION: Reduce ambient count to free up GPU for main transforming stars
+            const count = Math.floor((width * height) / 15000); 
+            for (let i = 0; i < count; i++) {
+                ambientStars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    size: Math.random() * 1.2 + 0.3,
+                    alpha: Math.random() * 0.5 + 0.1, // Softer ambient presence
+                    twinkleSpeed: Math.random() * 0.02 + 0.005,
+                    twinklePhase: Math.random() * Math.PI * 2,
+                    colorIndex: Math.floor(Math.random() * PALETTE.length)
+                });
+            }
+        }
+
+        function createStarParticle(target) {
+            // Off-screen launch origin
+            const side = Math.floor(Math.random() * 4);
+            let startX, startY;
+            const margin = 200;
+
+            switch (side) {
+                case 0: // Top
+                    startX = Math.random() * (width + margin * 2) - margin;
+                    startY = -margin - Math.random() * 100;
+                    break;
+                case 1: // Right
+                    startX = width + margin + Math.random() * 100;
+                    startY = Math.random() * (height + margin * 2) - margin;
+                    break;
+                case 2: // Bottom
+                    startX = Math.random() * (width + margin * 2) - margin;
+                    startY = height + margin + Math.random() * 100;
+                    break;
+                case 3: // Left
+                    startX = -margin - Math.random() * 100;
+                    startY = Math.random() * (height + margin * 2) - margin;
+                    break;
+            }
+
+            // Quadratic Bezier curve control point for curved entry
+            const midX = (startX + target.x) / 2;
+            const midY = (startY + target.y) / 2;
+            const dist = Math.hypot(target.x - startX, target.y - startY);
+            
+            const angle = Math.atan2(target.y - startY, target.x - startX) + (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2.2);
+            const curveMagnitude = dist * (0.2 + Math.random() * 0.4);
+            
+            const controlX = midX + Math.cos(angle) * curveMagnitude;
+            const controlY = midY + Math.sin(angle) * curveMagnitude;
+
+            const delay = Math.random() * 2.0; // Entry stagger
+            const duration = 2.2 + Math.random() * 1.2;
+
+            const colorIndex = Math.floor(Math.random() * PALETTE.length);
+            const size = Math.random() * 1.2 + 0.8; // MOBILE OPTIMIZATION: Slightly smaller base stars
+
+            return {
+                startX, startY,
+                controlX, controlY,
+                nameX: target.x,
+                nameY: target.y,
+                x: startX,
+                y: startY,
+                delay,
+                duration,
+                colorIndex,
+                size,
+                baseAlpha: Math.random() * 0.4 + 0.6,
+                twinkleSpeed: Math.random() * 0.04 + 0.02,
+                twinklePhase: Math.random() * Math.PI * 2,
+                floatOffset: Math.random() * Math.PI * 2,
+                flareSpikes: Math.random() > 0.45 ? 4 : 0,
+
+                // Properties for transformation phase
+                transStartX: 0,
+                transStartY: 0,
+                transControlX: 0,
+                transControlY: 0,
+                transTargetX: 0,
+                transTargetY: 0,
+                transDelay: 0,
+                transDuration: 0
+            };
+        }
+
+        function initSystem() {
+            nameTargets = sampleTextPoints(NAME, false);
+            messageTargets = sampleTextPoints(MESSAGE, true);
+
+            // Create initial stars for NAME formation
+            mainStars = nameTargets.map(createStarParticle);
+            initAmbientStars();
+
+            animationStartTime = performance.now();
+            currentStage = 'FLIGHT';
+        }
+
+        function startTransformation(now) {
+            currentStage = 'TRANSITION';
+            transitionStartTime = now;
+
+            // Shuffle message targets to randomize particle travel distribution
+            const shuffledTargets = [...messageTargets].sort(() => Math.random() - 0.5);
+
+            const numNameStars = mainStars.length;
+            const numMsgTargets = shuffledTargets.length;
+
+            // Calculate bounding box of NAME for staggered breakaway wave
+            let minX = Infinity, maxX = -Infinity;
+            mainStars.forEach(p => {
+                if (p.nameX < minX) minX = p.nameX;
+                if (p.nameX > maxX) maxX = p.nameX;
+            });
+            const nameWidth = Math.max(maxX - minX, 1);
+
+            // Assign new message targets to existing NAME stars
+            for (let i = 0; i < numNameStars; i++) {
+                const p = mainStars[i];
+                p.transStartX = p.x;
+                p.transStartY = p.y;
+
+                if (i < numMsgTargets) {
+                    p.transTargetX = shuffledTargets[i].x;
+                    p.transTargetY = shuffledTargets[i].y;
+                } else {
+                    // Surplus stars become orbiting ambient sparkles around message bounds
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = Math.random() * (width * 0.4) + 100;
+                    p.transTargetX = width / 2 + Math.cos(angle) * radius;
+                    p.transTargetY = height / 2 + Math.sin(angle) * radius;
+                }
+
+                // Swirling trajectory calculation
+                const midX = (p.transStartX + p.transTargetX) / 2;
+                const midY = (p.transStartY + p.transTargetY) / 2;
+                const dist = Math.hypot(p.transTargetX - p.transStartX, p.transTargetY - p.transStartY);
+
+                const offsetAngle = Math.atan2(p.transTargetY - p.transStartY, p.transTargetX - p.transStartX) + 
+                                    (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2.5);
+                const curveMag = Math.min(dist * 0.65, 280) + Math.random() * 80;
+
+                p.transControlX = midX + Math.cos(offsetAngle) * curveMag;
+                p.transControlY = midY + Math.sin(offsetAngle) * curveMag;
+
+                // Left-to-right dissolve wave stagger
+                const normalizedX = (p.nameX - minX) / nameWidth;
+                p.transDelay = normalizedX * 0.8 + Math.random() * 0.5;
+                p.transDuration = 1.8 + Math.random() * 1.0;
+            }
+
+            // If MESSAGE requires more particles than NAME had, dynamically spawn additional stars seamlessly
+            if (numMsgTargets > numNameStars) {
+                const extraNeeded = numMsgTargets - numNameStars;
+                for (let k = 0; k < extraNeeded; k++) {
+                    const target = shuffledTargets[numNameStars + k];
+                    
+                    // Burst out from existing star cluster centers
+                    const parentStar = mainStars[Math.floor(Math.random() * numNameStars)];
+                    const startX = parentStar.x + (Math.random() - 0.5) * 40;
+                    const startY = parentStar.y + (Math.random() - 0.5) * 40;
+
+                    const midX = (startX + target.x) / 2;
+                    const midY = (startY + target.y) / 2;
+                    const dist = Math.hypot(target.x - startX, target.y - startY);
+
+                    const angle = Math.atan2(target.y - startY, target.x - startX) + (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2.5);
+                const curveMag = Math.min(dist * 0.5, 200) + Math.random() * 60;
+
+                const colorIndex = Math.floor(Math.random() * PALETTE.length);
+
+                mainStars.push({
+                    startX, startY,
+                    controlX: midX, controlY: midY,
+                    nameX: startX, nameY: startY,
+                    x: startX, y: startY,
+                    delay: 0, duration: 2.0,
+                    colorIndex,
+                    size: Math.random() * 1.2 + 0.8,
+                    baseAlpha: Math.random() * 0.4 + 0.6,
+                        twinkleSpeed: Math.random() * 0.04 + 0.02,
+                        twinklePhase: Math.random() * Math.PI * 2,
+                        floatOffset: Math.random() * Math.PI * 2,
+                        flareSpikes: Math.random() > 0.45 ? 4 : 0,
+
+                        transStartX: startX,
+                        transStartY: startY,
+                        transControlX: midX + Math.cos(angle) * curveMag,
+                        transControlY: midY + Math.sin(angle) * curveMag,
+                        transTargetX: target.x,
+                        transTargetY: target.y,
+                        transDelay: 0.4 + Math.random() * 0.8,
+                        transDuration: 1.8 + Math.random() * 1.0
+                    });
+                }
+            }
+        }
+
+        function render(now) {
+            const elapsedTotal = (now - animationStartTime) / 1000;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // Additive blending for glowing light accumulation
+            ctx.globalCompositeOperation = 'lighter';
+
+            // 1. Render Ambient Background Stars
+            for (let i = 0; i < ambientStars.length; i++) {
+                const s = ambientStars[i];
+                const tw = Math.sin(now * 0.002 * s.twinkleSpeed * 50 + s.twinklePhase) * 0.3 + 0.7;
+                const finalAlpha = s.alpha * tw;
+
+                // MOBILE PORTRAIT OPTIMIZATION: Draw super-fast pre-rendered sprites
+                const sprite = starSprites[`${s.colorIndex}_0`];
+                const drawSize = s.size * 5; 
+                
+                ctx.globalAlpha = Math.max(0, Math.min(1, finalAlpha));
+                ctx.drawImage(sprite, s.x - drawSize/2, s.y - drawSize/2, drawSize, drawSize);
+            }
+
+            // 2. Main Particle Rendering & Trajectory Interpolation
+            let nameArrivals = 0;
+
+            for (let i = 0; i < mainStars.length; i++) {
+                const p = mainStars[i];
+                let currentX = p.x;
+                let currentY = p.y;
+                let alphaMultiplier = 1.0;
+                let flareOverride = p.flareSpikes === 4;
+                let sizeMultiplier = 1.0; // Used to sharpen particles for the smaller 2nd text
+
+                if (currentStage === 'FLIGHT') {
+                    if (elapsedTotal < p.delay) continue;
+
+                    const flightProgress = Math.min((elapsedTotal - p.delay) / p.duration, 1.0);
+                    const ease = easeOutQuart(flightProgress);
+
+                    if (flightProgress < 1.0) {
+                        const inv = 1 - ease;
+                        currentX = inv * inv * p.startX + 2 * inv * ease * p.controlX + ease * ease * p.nameX;
+                        currentY = inv * inv * p.startY + 2 * inv * ease * p.controlY + ease * ease * p.nameY;
+                    } else {
+                        nameArrivals++;
+                        const floatTime = elapsedTotal * 1.5 + p.floatOffset;
+                        currentX = p.nameX + Math.sin(floatTime) * 0.8;
+                        currentY = p.nameY + Math.cos(floatTime * 0.8) * 0.8;
+                    }
+
+                    if (flightProgress < 0.1) {
+                        alphaMultiplier = flightProgress / 0.1;
+                    }
+
+                } else if (currentStage === 'NAME_HOLD') {
+                    const floatTime = elapsedTotal * 1.5 + p.floatOffset;
+                    currentX = p.nameX + Math.sin(floatTime) * 0.8;
+                    currentY = p.nameY + Math.cos(floatTime * 0.8) * 0.8;
+
+                } else if (currentStage === 'TRANSITION' || currentStage === 'MESSAGE_HOLD') {
+                    const transElapsed = (now - transitionStartTime) / 1000;
+
+                    if (transElapsed < p.transDelay) {
+                        // Agitate slightly before breaking away
+                        const jitter = Math.sin(transElapsed * 20 + p.floatOffset) * 1.2;
+                        currentX = p.transStartX + jitter;
+                        currentY = p.transStartY + jitter;
+                    } else {
+                        const transProgress = Math.min((transElapsed - p.transDelay) / p.transDuration, 1.0);
+                        const ease = easeInOutCubic(transProgress);
+
+                        // Smoothly shrink particles & dim the glow slightly to make small letters legible
+                        sizeMultiplier = 1.0 - (0.45 * transProgress);
+                        alphaMultiplier *= (1.0 - 0.25 * transProgress);
+
+                        if (transProgress < 1.0) {
+                            const inv = 1 - ease;
+                            currentX = inv * inv * p.transStartX + 2 * inv * ease * p.transControlX + ease * ease * p.transTargetX;
+                            currentY = inv * inv * p.transStartY + 2 * inv * ease * p.transControlY + ease * ease * p.transTargetY;
+                        } else {
+                            // Arrived at MESSAGE position
+                            const floatTime = transElapsed * 1.5 + p.floatOffset;
+                            currentX = p.transTargetX + Math.sin(floatTime) * 0.8;
+                            currentY = p.transTargetY + Math.cos(floatTime * 0.8) * 0.8;
+
+                            // Horizontal sparkle sweep wave across formed MESSAGE
+                            const wavePosition = ((transElapsed - 2.0) % 4.0) / 4.0 * (width + 400) - 200;
+                            const distToWave = Math.abs(currentX - wavePosition);
+                            if (distToWave < 80) {
+                                const waveIntensity = 1 - distToWave / 80;
+                                alphaMultiplier += waveIntensity * 0.8;
+                                flareOverride = true;
+                            }
+                        }
+                    }
+                }
+
+                // Update particle location state
+                p.x = currentX;
+                p.y = currentY;
+
+                // Calculate twinkling and brightness
+                const twinkle = Math.sin(now * 0.003 * p.twinkleSpeed * 40 + p.twinklePhase) * 0.25 + 0.75;
+                const finalAlpha = p.baseAlpha * twinkle * alphaMultiplier;
+
+                // MOBILE PORTRAIT OPTIMIZATION: Draw super-fast pre-rendered sprites instead of complex paths
+                const sprite = starSprites[`${p.colorIndex}_${flareOverride ? 1 : 0}`];
+                const drawSize = p.size * 9 * sizeMultiplier; // Apply size reduction here
+                
+                ctx.globalAlpha = Math.max(0, Math.min(1, finalAlpha));
+                ctx.drawImage(sprite, currentX - drawSize/2, currentY - drawSize/2, drawSize, drawSize);
+            }
+
+            ctx.globalCompositeOperation = 'source-over';
+
+            // Stage progression logic
+            if (currentStage === 'FLIGHT') {
+                const ratio = nameArrivals / mainStars.length;
+                if (ratio > 0.96 || elapsedTotal > 4.2) {
+                    currentStage = 'NAME_HOLD';
+                }
+            } else if (currentStage === 'NAME_HOLD') {
+                // Keep NAME visible for ~1.8 seconds before triggering transformation
+                if (elapsedTotal > 5.5) {
+                    startTransformation(now);
+                }
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        function handleResize() {
+            // MOBILE PORTRAIT OPTIMIZATION: Cap Device Pixel Ratio at 2. 
+            // Pro iPhones use a DPR of 3, which creates 9x the pixels and destroys Canvas frame rates. 
+            // Capping at 2 ensures it remains retina-crisp while locking to 60FPS.
+            dpr = Math.min(window.devicePixelRatio || 1, 2);
+            width = window.innerWidth;
+            height = window.innerHeight;
+
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+
+            ctx.scale(dpr, dpr);
+
+            // Re-initialize stars to adapt nicely to new screen dimensions
+            initSystem();
+        }
+
+        let resizeDebounceTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeDebounceTimer);
+            resizeDebounceTimer = setTimeout(handleResize, 250);
+        });
+
+        // Initialize display and trigger animation cycle
+        window.addEventListener('load', () => {
+            preRenderSprites(); // MOBILE PORTRAIT OPTIMIZATION: Generate sprites immediately on load
+            handleResize();
+            requestAnimationFrame(render);
+        });
+    </script>
+</body>
+</html>
